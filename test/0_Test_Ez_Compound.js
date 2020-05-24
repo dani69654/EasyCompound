@@ -85,7 +85,7 @@ const web3 = new Web3('http://127.0.0.1:8545');
 
 
     //Checking cEth accounts[0] balance
-    let result = await contractInstance.methods.getUsercEthBalance(accounts[0]).call();
+    let result = await contractInstance.methods.getUserCethBalance(accounts[0]).call();
     console.log("User has: " + result.toString() + " cEth");
 
     //Checking cEth in contract by using the cToken abstaction
@@ -93,7 +93,7 @@ const web3 = new Web3('http://127.0.0.1:8545');
     console.log("Contract has: " +result.toString() + " cEth");
 
     //Checking cEth in contract by using the contract variable
-    let result2 = await contractInstance.methods.getcontractcEtherBalance().call();
+    let result2 = await contractInstance.methods.getContractCethBalance().call();
     console.log("Contract has: " +result.toString() + " cEth");
 
     //The 3 results obtained should be the same since all the balances were 0
@@ -115,11 +115,11 @@ const web3 = new Web3('http://127.0.0.1:8545');
     gasPrice: web3.utils.toHex(200000000000)});
 
     //Asserts accounts[0] has now 0 cEth
-    let result = await contractInstance.methods.getUsercEthBalance(accounts[0]).call();
+    let result = await contractInstance.methods.getUserCethBalance(accounts[0]).call();
     assert(result == 0);
 
     //Asserts  contract has now 0 cEth
-    result = await contractInstance.methods.getcontractcEtherBalance().call();
+    result = await contractInstance.methods.getContractCethBalance().call();
     assert(result == 0);
 
     //Assertes accounts[0] has ≃ 1 Ether, will not be one because of fees

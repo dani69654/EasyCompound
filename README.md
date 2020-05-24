@@ -8,4 +8,7 @@ Users will deposit ether or Dai in Easy_Compound.sol to earn interests, knowing 
 
 
 
-Suggestions are always accepted
+# 24.05.2020
+  
+  > Fixed bugs in user C token balances calculations;
+  > Unit testing is now available;

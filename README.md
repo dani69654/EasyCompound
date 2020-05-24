@@ -7,8 +7,7 @@ The idea is to allow anyone to import this project and use lend to compound by n
 Users will deposit ether or Dai in Easy_Compound.sol to earn interests, knowing that they will be able to withdraw at any time.
 
 
-
-# 24.05.2020
+24.05.2020
   
-  > Fixed bugs in user C token balances calculations;
-  > Unit testing is now available;
+ > Fixed bugs in user C token balances calculations;<br>
+ > Unit testing is now available;

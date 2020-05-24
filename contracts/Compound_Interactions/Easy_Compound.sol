@@ -40,14 +40,14 @@ contract Easy_Compound is Ownable, Pausable {
 
   using SafeMath for uint256;
 
-  address public daiContractAddress; // Contains Dai SmartContract address || 0x6B175474E89094C44Da98b954EedeAC495271d0F ||
-  address public cDaiContractAddress; // Contains cDai SmartContract address || 0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643 ||
-  address public cEthContractAddress; // Contains eEth SmartContract address || 0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5 ||
+  address private daiContractAddress; // Contains Dai SmartContract address || 0x6B175474E89094C44Da98b954EedeAC495271d0F ||
+  address private cDaiContractAddress; // Contains cDai SmartContract address || 0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643 ||
+  address private cEthContractAddress; // Contains eEth SmartContract address || 0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5 ||
 
-  uint256 public contractEtherBalance; // Total amount of Ether in Escrow
-  uint256 public contractDaiBalance; // Total amount of Dai in Escrow
-  uint256 public contractcEtherBalance; // Total amount of cEther in Escrow
-  uint256 public contractcDaiBalance; // Total amount of cDai in Escrow
+  uint256 private contractEtherBalance; // Total amount of Ether in Escrow
+  uint256 private contractDaiBalance; // Total amount of Dai in Escrow
+  uint256 private contractCethBalance; // Total amount of cEther in Escrow
+  uint256 private contractCdaiBalance; // Total amount of cDai in Escrow
 
 
   event daiChanged (address _addr, uint256 _amount); // Emit address[0] and _amount increased/decreased
@@ -59,24 +59,23 @@ contract Easy_Compound is Ownable, Pausable {
     cEthContractAddress = _cEthContractAddress;
   }
 
-  mapping (address => uint256) private EtherAddrBalance; // Total amount of Ether owner by address in Escrow
-  mapping (address => uint256) private DaiAddrBalance; // Total amount of Dai owned by address in Escrow
-  mapping (address => uint256) private cEtherAddrBalance; // Total amount of cEther owner by address in Escrow
-  mapping (address => uint256) private cDaiAddrBalance;// Total amount of cDai owner by address in Escrow
+  mapping (address => uint256) private etherAddrBalance; // Total amount of Ether owner by address in contract
+  mapping (address => uint256) private daiAddrBalance; // Total amount of Dai owned by address in contract
+  mapping (address => uint256) private cetherAddrBalance; // Total amount of cEther owner by address in contract
+  mapping (address => uint256) private cdaiAddrBalance;// Total amount of cDai owner by address in contract
 
 
-  function depositEther () public payable returns (uint256) {
+  function depositEther () public payable returns (bool){
     // Deposit Ether in contract
-    // Returns balance of msg.sender
 
-    EtherAddrBalance[msg.sender] = EtherAddrBalance[msg.sender].add(msg.value);
+    etherAddrBalance[msg.sender] = etherAddrBalance[msg.sender].add(msg.value);
     contractEtherBalance = contractEtherBalance.add(msg.value);
     emit ethChanged (msg.sender, msg.value);
-    return EtherAddrBalance[msg.sender];
+    return true;
   }
 
 
-  function depositDaiTokens (uint256 _amount) public returns (uint256) {
+  function depositDaiTokens (uint256 _amount) public returns (bool) {
     /*
     @Dev --> You must approve this contract to use the function 'transferFrom'
          --> Uso cDaiContractAddress.approve(thisContractAddr, amount)
@@ -86,10 +85,10 @@ contract Easy_Compound is Ownable, Pausable {
     */
     bool check = Erc20(daiContractAddress).transferFrom(msg.sender,address(this), _amount);
     require (check == true, "Dai transfer failed");
-    DaiAddrBalance[msg.sender] = DaiAddrBalance[msg.sender].add(_amount);
+    daiAddrBalance[msg.sender] = daiAddrBalance[msg.sender].add(_amount);
     contractDaiBalance = contractDaiBalance.add(_amount);
     emit daiChanged (msg.sender, _amount);
-    return DaiAddrBalance[msg.sender];
+    return true;
   }
 
 
@@ -103,18 +102,23 @@ contract Easy_Compound is Ownable, Pausable {
   */
 
 
-  function supplyEthToCompound (uint256 _amount) public payable whenNotPaused returns (uint256) {
-    require (EtherAddrBalance[msg.sender] >= _amount, "Not enough balance");
+  function supplyEthToCompound (uint256 _amount) public payable whenNotPaused returns (bool){
+
+    //Check requirement and mint
+    require (etherAddrBalance[msg.sender] >= _amount, "Not enough balance");
     CEth(cEthContractAddress).mint.value(_amount).gas(20000000000)(); // No return, reverts on error
-    EtherAddrBalance[msg.sender] = EtherAddrBalance[msg.sender].sub(_amount);
 
-    uint256 cEthExchRate = CEth(cEthContractAddress).exchangeRateCurrent();
-    cEtherAddrBalance[msg.sender] = cEtherAddrBalance[msg.sender].add(cEthExchRate.mul(_amount));
-
+    //Subtract Ether _amount from contract and user balances
+    etherAddrBalance[msg.sender] = etherAddrBalance[msg.sender].sub(_amount);
     contractEtherBalance = contractEtherBalance.sub(_amount);
-    contractcEtherBalance = contractcEtherBalance.add(cEthExchRate.mul(_amount));
 
-    return cEtherAddrBalance[msg.sender];
+    //Increase Ether _amount in contract and user balances
+
+    uint256 cEthExchRate = getCethExchangeRate();
+    cetherAddrBalance[msg.sender] = cetherAddrBalance[msg.sender].add((_amount.mul(1000000000000000000)).div(cEthExchRate));
+    contractCethBalance = contractCethBalance.add(cetherAddrBalance[msg.sender]);
+
+    return true;
   }
 
 
@@ -126,24 +130,30 @@ contract Easy_Compound is Ownable, Pausable {
   Returns the amount of cDai owned by msg.sender
   */
 
-  function supplyErc20ToCompound (uint256 _numTokensToSupply) public whenNotPaused returns (uint256) {
+  function supplyErc20ToCompound (uint256 _amount) public whenNotPaused returns (bool) {
 
-    require (DaiAddrBalance [msg.sender] >= _numTokensToSupply, "Not enough balance");
+    require (daiAddrBalance [msg.sender] >= _amount, "Not enough balance");
 
     Erc20 underlying = Erc20(daiContractAddress);
     CErc20 cToken = CErc20(cDaiContractAddress);
 
-    underlying.approve(cDaiContractAddress, _numTokensToSupply);
-    // Mint cTokens
-    uint256 check = cToken.mint(_numTokensToSupply);
+    underlying.approve(cDaiContractAddress, _amount);
+
+    uint256 check = cToken.mint(_amount);
     require (check == 0, "Mint failed");
-    DaiAddrBalance[msg.sender] = DaiAddrBalance[msg.sender].sub(_numTokensToSupply);
 
+    //Decreasing contract and user Dai balances -= _amount
+    daiAddrBalance[msg.sender] = daiAddrBalance[msg.sender].sub(_amount);
+    contractDaiBalance = contractDaiBalance.sub(_amount);
+
+    //Increasing contract and user cDai balances += _amount
     uint256 cDaiExchRate = CErc20(cDaiContractAddress).exchangeRateCurrent();
-    cDaiAddrBalance[msg.sender] = cDaiAddrBalance[msg.sender].add(cDaiExchRate.mul(_numTokensToSupply));
+    cdaiAddrBalance[msg.sender] = cdaiAddrBalance[msg.sender].add((_amount.mul(1000000000000000000)).div(cDaiExchRate));
 
-    contractDaiBalance = contractDaiBalance.sub(_numTokensToSupply);
-    contractcDaiBalance = contractcDaiBalance.add(cDaiExchRate.mul(_numTokensToSupply));
+
+    contractCdaiBalance = contractCdaiBalance.add((_amount.mul(1000000000000000000)).div(cDaiExchRate));
+
+    return true;
   }
 
 
@@ -159,23 +169,27 @@ contract Easy_Compound is Ownable, Pausable {
     require(check == 0, "Redeem failed");
 
     if(_cTokenAddress == cDaiContractAddress){
-      cDaiAddrBalance[msg.sender] = cDaiAddrBalance[msg.sender].sub(_amount);
-      contractcDaiBalance = contractcDaiBalance.sub(_amount);
+      cdaiAddrBalance[msg.sender] = cdaiAddrBalance[msg.sender].sub(_amount);
+      contractCdaiBalance = contractCdaiBalance.sub(_amount);
+
       uint cDaiExchRate = CErc20(cDaiContractAddress).exchangeRateCurrent();
-      contractDaiBalance = contractDaiBalance.add(_amount.div(cDaiExchRate));
-      cDaiAddrBalance[msg.sender] = cDaiAddrBalance[msg.sender].add(_amount.div(cDaiExchRate));
+
+      contractDaiBalance = contractDaiBalance.add((_amount.mul(cDaiExchRate)).div(1000000000000000000));
+      daiAddrBalance[msg.sender] = daiAddrBalance[msg.sender].add((_amount.mul(cDaiExchRate)).div(1000000000000000000));
       return true;
     }
 
     if(_cTokenAddress == cEthContractAddress){
-      cEtherAddrBalance[msg.sender] = cEtherAddrBalance[msg.sender].sub(_amount);
-      contractcEtherBalance = contractcEtherBalance.sub(_amount);
+      cetherAddrBalance[msg.sender] = cetherAddrBalance[msg.sender].sub(_amount);
+      contractCethBalance = contractCethBalance.sub(_amount);
+
       uint256 cEthExchRate = CEth(cEthContractAddress).exchangeRateCurrent();
-      contractcEtherBalance = contractcEtherBalance.add(_amount.div(cEthExchRate));
-      cEtherAddrBalance[msg.sender] = cEtherAddrBalance[msg.sender].add(_amount.div(cEthExchRate));
+
+      contractEtherBalance = contractEtherBalance.add((_amount.mul(cEthExchRate)).div(1000000000000000000));
+      etherAddrBalance[msg.sender] = etherAddrBalance[msg.sender].add((_amount.mul(cEthExchRate)).div(1000000000000000000));
       return true;
     }
-    revert(); //This should never happen
+    revert('fatal'); //This should never happen ---> This could trigger a lockdown? Fatal error
   }
 
 
@@ -185,9 +199,9 @@ contract Easy_Compound is Ownable, Pausable {
     //Emit the user address and amount withdrawn
 
     require (_amount > 0.01 ether, "Min 0.01 ether");
-    require (EtherAddrBalance[msg.sender] >=  _amount , "Not enough funds");
+    require (etherAddrBalance[msg.sender] >=  _amount , "Not enough funds");
 
-    EtherAddrBalance[msg.sender] = EtherAddrBalance[msg.sender].sub(_amount);
+    etherAddrBalance[msg.sender] = etherAddrBalance[msg.sender].sub(_amount);
 
     contractEtherBalance = contractEtherBalance.sub(_amount);
 
@@ -204,9 +218,9 @@ contract Easy_Compound is Ownable, Pausable {
     //Emit the user address and amount withdrawn
 
 
-    require (DaiAddrBalance[msg.sender] >= _amount, "Not enough funds");
+    require (daiAddrBalance[msg.sender] >= _amount, "Not enough funds");
 
-    DaiAddrBalance[msg.sender] = DaiAddrBalance[msg.sender].sub(_amount);
+    daiAddrBalance[msg.sender] = daiAddrBalance[msg.sender].sub(_amount);
 
     contractDaiBalance = contractDaiBalance.sub(_amount);
 
@@ -224,11 +238,38 @@ contract Easy_Compound is Ownable, Pausable {
   //Getter and setter functions
 
   /*
-    Return the balances of Easy_Compound:
-    > cDai balance
+  Returns: the balances of Easy_Compound:
+    > Ether contract balance
     > Dai balance
+    > cDai balance
     > CEth balance
   */
+
+  function getContractEtherBalance () public view returns (uint256){
+
+    //Returns variable 'contractEtherBalance';
+    return contractEtherBalance;
+  }
+
+  function getContractDaiBalance () public view returns (uint256){
+
+    //Returns variable 'contractDaiBalance';
+    return contractDaiBalance;
+  }
+
+  function getContractCethBalance () public view returns (uint256){
+
+    //Returns variable 'contractCethBalance';
+    return contractCethBalance;
+  }
+
+  function getContractCdaiBalance () public view returns (uint256){
+
+    ////Returns variable 'contractCdaiBalance';
+    return contractCdaiBalance;
+  }
+
+
 
   function getCErc20Balance () public returns (uint256){
     return CErc20(cDaiContractAddress).balanceOfUnderlying(address(this));
@@ -244,16 +285,16 @@ contract Easy_Compound is Ownable, Pausable {
 
   /* Return C Tokens exchange rates */
 
-  function getcDaiExchangeRate () public returns (uint256){
+  function getCdaiExchangeRate () public returns (uint256){
     return CErc20(cDaiContractAddress).exchangeRateCurrent();
   }
 
-  function getcEthExchangeRate () public returns (uint256){
+  function getCethExchangeRate () public returns (uint256){
     return CEth(cEthContractAddress).exchangeRateCurrent();
   }
 
 
-  /* Return User balances in escrow and compound
+  /* Return User balances in escrow
      > Get user Ether balance in escrow
      > Get user Dai balance in escrow
      > Get user cEther balance in escrow
@@ -261,27 +302,28 @@ contract Easy_Compound is Ownable, Pausable {
   */
 
   function getUserEthBalance (address _user) public view returns (uint256){
-    return EtherAddrBalance[_user];
+    return etherAddrBalance[_user];
   }
 
   function getUserDaiBalance (address _user) public view returns (uint256){
-    return DaiAddrBalance[_user];
+    return daiAddrBalance[_user];
   }
 
-  function getUsercEthBalance (address _user) public view returns (uint256){
-    return cEtherAddrBalance[_user];
+  function getUserCethBalance (address _user) public view returns (uint256){
+    return cetherAddrBalance[_user];
   }
 
-  function getUsercDaiBalance (address _user) public view returns (uint256){
-    return cDaiAddrBalance[_user];
+  function getUserCdaiBalance (address _user) public view returns (uint256){
+    return cdaiAddrBalance[_user];
   }
 
 
 
-  /* Setters for main contracts
-      > Dai address
-      > cDai address
-      > cEth address
+  /* Setters for compound and erc20 contracts
+  Requirements: Contract must be paused
+    > Dai address
+    > cDai address
+    > cEth address
   */
 
 

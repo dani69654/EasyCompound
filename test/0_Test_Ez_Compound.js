@@ -31,7 +31,7 @@ contract("Easy_Compound", async function(accounts){
 let instance;
 let contractInstance;
 const oneToken = Web3.utils.toWei('1', 'ether');
-const almostOneToken = Web3.utils.toWei('0.999', 'ether');
+
 
 
 const web3 = new Web3('http://127.0.0.1:8545');
@@ -116,15 +116,16 @@ const web3 = new Web3('http://127.0.0.1:8545');
 
     //Asserts accounts[0] has now 0 cEth
     let result = await contractInstance.methods.getUserCethBalance(accounts[0]).call();
-    assert(result == 0);
+    assert(result == 0,'1');
 
     //Asserts  contract has now 0 cEth
     result = await contractInstance.methods.getContractCethBalance().call();
-    assert(result == 0);
+    assert(result == 0,'2');
 
     //Assertes accounts[0] has ≃ 1 Ether, will not be one because of fees
     result = await contractInstance.methods.getUserEthBalance(accounts[0]).call();
-    assert(result > almostOneToken);
+    assert(result > 959999999999999999);
+
   })
 
 
@@ -163,6 +164,9 @@ const web3 = new Web3('http://127.0.0.1:8545');
     let result = await contractInstance.methods.getUserDaiBalance(accounts[0]).call();
     assert (result == 0);
 
+    result = await compoundDaiContract.methods.balanceOf(accounts[0]).call();
+    console.log(result);
+
     //Redeeming cDai for Dai
     let userToken = await contractInstance.methods.getUserCdaiBalance(accounts[0]).call();
     let check = await contractInstance.methods.redeemCtokens(userToken,cDaiContractAddress).send({from: accounts[0],
@@ -171,12 +175,57 @@ const web3 = new Web3('http://127.0.0.1:8545');
 
     //Asserting user got Dai back
     let userDaibalance = await contractInstance.methods.getUserDaiBalance(accounts[0]).call();
-    assert (userDaibalance >= oneToken); //Will be a bit more than one Dai thanks to fees
+    assert (userDaibalance >= oneToken);
 
     //Asserting user and contract balances are the same
     let contractDaibalance = await contractInstance.methods.getDaiBalance().call();
+
+
+    await contractInstance.methods.withdrawDai(oneToken).send({from: accounts[0],
+    gasLimit: web3.utils.toHex(1500000),
+    gasPrice: web3.utils.toHex(200000000000)});
+
     assert (userDaibalance == contractDaibalance);
 
+    result = await compoundDaiContract.methods.balanceOf('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1').call();
+    console.log(result);
+
+  })
+
+  it("Should pause the contract only if owner.", async function(){
+
+    //Should fail, sender != Owner
+    truffleAssert.fails(contractInstance.methods.pause().send({from:accounts[1]}));
+
+    //Pausing contract
+    await contractInstance.methods.pause().send({from:accounts[0]});
+
+    //Should fail
+    truffleAssert.fails(contractInstance.methods.supplyEthToCompound(oneToken).send({from:accounts[0]}));
+
+  })
+
+  it("Should let me set contract addresses only if owner.", async function(){
+
+    let addr = '0x0000000000000000000000000000000000000000'; //Test address
+    await instance.setDAIcontractAddress(addr).then(async function(){
+      await instance.getDaiContractAddress().then(async function(res){
+        assert(res == addr);
+      })
+    })
+
+    //Should fail, sender !- owner
+
+    truffleAssert.fails(instance.setDAIcontractAddress(addr,{from:accounts[1]}));
+
+
+    //Unpausing contract
+
+    await instance.unpause({from:accounts[0]});
+
+    // Should fail, contract is not whenPaused
+
+    truffleAssert.fails(instance.setDAIcontractAddress(addr,{from:accounts[0]}));
   })
 
 })

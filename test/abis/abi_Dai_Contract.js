@@ -248,7 +248,7 @@ let abi_Dai_Contract = [
         "payable": false,
         "stateMutability": "view",
         "type": "function",
-        "signature": "0xdd62ed3e"}];
+        "signature": "0xdd62ed3e"}]; 
 
         module.exports = abi_Dai_Contract
 

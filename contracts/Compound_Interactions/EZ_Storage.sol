@@ -55,7 +55,8 @@ contract EZstorage is Ownable, Pausable{
 
   event daiChanged (address _addr, uint256 _amount); // Emit address[0] and _amount increased/decreased
   event ethChanged (address _addr, uint256 _amount); // Emit address[0] and _amount increased/decreased
-
+  event cDaiChanged (address _addr, uint256 _amount); // Emit address[0] and _amount increased/decreased
+  event cEthChanged (address _addr, uint256 _amount); // Emit address[0] and _amount increased/decreased
 
     //Getter and setter functions
 

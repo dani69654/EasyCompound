@@ -12,7 +12,7 @@ const abi_cEth_Contract = require('../test/abis/abi_cEth_Contract.js');
 
 //Declaring contract addresses
 
-const cEthContractAddress = '0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5';
+const cEthContractAddress = "0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5";
 const daiContractAddress = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const cDaiContractAddress = "0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643";
 
@@ -32,9 +32,6 @@ let instance;
 let contractInstance;
 const oneToken = Web3.utils.toWei('1', 'ether');
 
-
-
-const web3 = new Web3('http://127.0.0.1:8545');
 
 
   before (async function(){
@@ -69,10 +66,6 @@ const web3 = new Web3('http://127.0.0.1:8545');
     //Moving the authorized Dai amount from user to escrow
     await contractInstance.methods.depositDaiTokens(oneToken).send({from:accounts[0]});
 
-    //Returns dai balance in escrow. Since that was the only Dai deposit, must be oneToken
-    let result = await contractInstance.methods.getDaiBalance().call();
-    assert (result == oneToken);
-
   })
 
 
@@ -90,20 +83,19 @@ const web3 = new Web3('http://127.0.0.1:8545');
 
     //Checking cEth in contract by using the cToken abstaction
     let result1 = await contractInstance.methods.getCEthBalance().call();
-    console.log("Contract has: " +result.toString() + " cEth");
 
     //Checking cEth in contract by using the contract variable
     let result2 = await contractInstance.methods.getContractCethBalance().call();
-    console.log("Contract has: " +result.toString() + " cEth");
 
     //The 3 results obtained should be the same since all the balances were 0
-    assert(result == result1 &&  result1 == result2);
+    assert(result == result2 && result1 == result2);
 
     //User should have 0 Ether because they were just swapped into cEth
     result = await contractInstance.methods.getUserEthBalance(accounts[0]).call();
     assert(result == 0);
 
   })
+
 
 
   it("Should redeem cEth.", async function(){
@@ -165,7 +157,7 @@ const web3 = new Web3('http://127.0.0.1:8545');
     assert (result == 0);
 
     result = await compoundDaiContract.methods.balanceOf(accounts[0]).call();
-    console.log(result);
+    console.log("DAI balance accounts[0] " + result);
 
     //Redeeming cDai for Dai
     let userToken = await contractInstance.methods.getUserCdaiBalance(accounts[0]).call();
@@ -177,20 +169,48 @@ const web3 = new Web3('http://127.0.0.1:8545');
     let userDaibalance = await contractInstance.methods.getUserDaiBalance(accounts[0]).call();
     assert (userDaibalance >= oneToken);
 
-    //Asserting user and contract balances are the same
-    let contractDaibalance = await contractInstance.methods.getDaiBalance().call();
+  })
 
 
-    await contractInstance.methods.withdrawDai(oneToken).send({from: accounts[0],
-    gasLimit: web3.utils.toHex(1500000),
-    gasPrice: web3.utils.toHex(200000000000)});
+  it ("Should withdraw cTokens", async function(){
 
-    assert (userDaibalance == contractDaibalance);
 
-    result = await compoundDaiContract.methods.balanceOf('0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1').call();
-    console.log(result);
+    await contractInstance.methods.getUserDaiBalance(accounts[0]).call().then(async function(res){
+      await contractInstance.methods.supplyErc20ToCompound(res).send({
+        from: accounts[0],
+        gasLimit: web3.utils.toHex(1500000),
+        gasPrice: web3.utils.toHex(200000000000)
+      })
+    })
+
+    let userCdaiBalance = await contractInstance.methods.getUserCdaiBalance(accounts[0]).call();
+
+    // Checking accounts[0] cDai before after withdraw
+
+    let cDaiBeforeAccounts0 = await compoundcDaiContract.methods.balanceOfUnderlying(accounts[0]).call();
+    console.log("Accounts[0] cDai balance before withdraw: " + cDaiBeforeAccounts0);
+
+
+    await contractInstance.methods.withdrawERC20Token(cDaiContractAddress,userCdaiBalance).send({
+      from: accounts[0],
+      gasLimit: web3.utils.toHex(1500000),
+      gasPrice: web3.utils.toHex(200000000000)
+    });
+
+    // Checking accounts[0] cDai after after withdraw
+    let cDaiAfterAccounts0 = await compoundcDaiContract.methods.balanceOfUnderlying(accounts[0]).call();
+    console.log("Accounts[0] cDai balance after withdraw: " + cDaiAfterAccounts0);
+
+    assert (cDaiBeforeAccounts0 < cDaiAfterAccounts0);
+
+
+    // Asserting contract has 0 cDai
+    let cDaiBalanceInstance = await compoundcDaiContract.methods.balanceOfUnderlying(instance.address).call();
+    console.log("instance.address cDai balance : " + result);
+    assert (cDaiBalanceInstance == 0);
 
   })
+
 
   it("Should pause the contract only if owner.", async function(){
 
@@ -204,6 +224,7 @@ const web3 = new Web3('http://127.0.0.1:8545');
     truffleAssert.fails(contractInstance.methods.supplyEthToCompound(oneToken).send({from:accounts[0]}));
 
   })
+
 
   it("Should let me set contract addresses only if owner.", async function(){
 

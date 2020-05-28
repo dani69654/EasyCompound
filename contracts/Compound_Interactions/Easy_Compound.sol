@@ -119,6 +119,7 @@ contract Easy_Compound is EZstorage {
   */
 
   function redeemCtokens (uint _amount, address _cTokenAddress) public whenNotPaused returns (bool) {
+
     require (_cTokenAddress == cDaiContractAddress || _cTokenAddress == cEthContractAddress, "Cannot redeem this token");
     uint256 check = CEth(_cTokenAddress).redeem(_amount);
     require(check == 0, "Redeem failed");
@@ -144,7 +145,7 @@ contract Easy_Compound is EZstorage {
       etherAddrBalance[msg.sender] = etherAddrBalance[msg.sender].add((_amount.mul(cEthExchRate)).div(1000000000000000000));
       return true;
     }
-    revert('#C TOKEN ADDRESS NOW FOUND');
+
   }
 
 
@@ -167,12 +168,11 @@ contract Easy_Compound is EZstorage {
 
 
 
-  function withdrawDai (uint256 _amount) public whenNotPaused {   // <-- This will be internal once completed the other withdraw functions ()
+  function withdrawDai (uint256 _amount) internal whenNotPaused {
 
     //Updates mappingS by subtracting _amount
     //Emit the user address and amount withdrawn
 
-    require (_amount >= oneToken, "Min 1 Dai");
     require (daiAddrBalance[msg.sender] >= _amount, "Not enough funds");
 
     daiAddrBalance[msg.sender] = daiAddrBalance[msg.sender].sub(_amount);
@@ -187,15 +187,51 @@ contract Easy_Compound is EZstorage {
   }
 
 
+  function withdrawcDai (uint256 _amount) internal whenNotPaused {
+
+    require (cdaiAddrBalance[msg.sender] >= _amount, "Not enough funds");
+
+    cdaiAddrBalance[msg.sender] = cdaiAddrBalance[msg.sender].sub(_amount);
+    contractCdaiBalance = contractCdaiBalance.sub(_amount);
+
+    bool check = CErc20(cDaiContractAddress).transfer(msg.sender, _amount);
+
+    require (check == true, "Transfer failed");
+
+    emit cDaiChanged (msg.sender, _amount);
+
+  }
+
+
+  function withdrawcEth (uint256 _amount) internal whenNotPaused {
+
+    require (cetherAddrBalance[msg.sender] >= _amount, "Not enough funds");
+
+    cetherAddrBalance[msg.sender] = cetherAddrBalance[msg.sender].sub(_amount);
+    contractCethBalance = contractCethBalance.sub(_amount);
+
+    bool check = CEth(cEthContractAddress).transfer(msg.sender, _amount);
+
+    require (check == true, "Transfer failed");
+
+    emit cEthChanged (msg.sender, _amount);
+
+  }
+
+
+
+
   function withdrawERC20Token (address _token, uint256 _amount) public {
 
-    require (_amount > oneToken, "Amount must be > oneToken");
+    // This is used to call withdrawal functions
+
+    require (_amount > 0, "Amount must be > 0");
 
     if(_token == daiContractAddress) {withdrawDai(_amount);}
-    if(_token == cDaiContractAddress) {withdrawDai(_amount);}
-    if(_token == cEthContractAddress) {withdrawDai(_amount);}
+    else if(_token == cDaiContractAddress) {withdrawcDai(_amount);}
+    else if(_token == cEthContractAddress) {withdrawcEth(_amount);}
+    else{revert("Invalid address");}
 
-    revert("Invalid address");
   }
 
 
